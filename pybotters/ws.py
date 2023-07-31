@@ -63,6 +63,7 @@ class WebSocketRunner:
                 **kwargs,
             )
         )
+        self.ws: Optional[aiohttp.ClientWebSocketResponse] = None
 
     async def _run_forever(
         self,
@@ -87,37 +88,38 @@ class WebSocketRunner:
             cooldown = asyncio.create_task(asyncio.sleep(60.0))
             try:
                 async with session.ws_connect(url, auth=auth, **kwargs) as ws:
+                    self.ws = ws
                     self.connected = True
                     self._event.set()
                     if send_str is not None:
                         if isinstance(send_str, list):
                             await asyncio.gather(
-                                *[ws.send_str(item) for item in send_str]
+                                *[self.ws.send_str(item) for item in send_str]
                             )
                         else:
-                            await ws.send_str(send_str)
+                            await self.ws.send_str(send_str)
                     if send_bytes is not None:
                         if isinstance(send_bytes, list):
                             await asyncio.gather(
-                                *[ws.send_bytes(item) for item in send_bytes]
+                                *[self.ws.send_bytes(item) for item in send_bytes]
                             )
                         else:
-                            await ws.send_bytes(send_bytes)
+                            await self.ws.send_bytes(send_bytes)
                     if send_json is not None:
                         if isinstance(send_json, list):
                             await asyncio.gather(
-                                *[ws.send_json(item) for item in send_json]
+                                *[self.ws.send_json(item) for item in send_json]
                             )
                         else:
-                            await ws.send_json(send_json)
-                    async for msg in ws:
+                            await self.ws.send_json(send_json)
+                    async for msg in self.ws:
                         if msg.type == aiohttp.WSMsgType.TEXT:
                             if hdlr_str is not None:
                                 try:
                                     if iscorofunc_str:
-                                        await hdlr_str(msg.data, ws)
+                                        await hdlr_str(msg.data, self.ws)
                                     else:
-                                        hdlr_str(msg.data, ws)
+                                        hdlr_str(msg.data, self.ws)
                                 except Exception as e:
                                     logger.exception(f"{pretty_modulename(e)}: {e}")
                             if hdlr_json is not None:
@@ -128,18 +130,18 @@ class WebSocketRunner:
                                 else:
                                     try:
                                         if iscorofunc_json:
-                                            await hdlr_json(data, ws)
+                                            await hdlr_json(data, self.ws)
                                         else:
-                                            hdlr_json(data, ws)
+                                            hdlr_json(data, self.ws)
                                     except Exception as e:
                                         logger.exception(f"{pretty_modulename(e)}: {e}")
                         elif msg.type == aiohttp.WSMsgType.BINARY:
                             if hdlr_bytes is not None:
                                 try:
                                     if iscorofunc_bytes:
-                                        await hdlr_bytes(msg.data, ws)
+                                        await hdlr_bytes(msg.data, self.ws)
                                     else:
-                                        hdlr_bytes(msg.data, ws)
+                                        hdlr_bytes(msg.data, self.ws)
                                 except Exception as e:
                                     logger.exception(f"{pretty_modulename(e)}: {e}")
                         elif msg.type == aiohttp.WSMsgType.ERROR:
